@@ -18,7 +18,7 @@ The final state survives in the file; the reasoning that produced it does
 not. The author knew why line 12 had to come before line 15, tried three
 other things first, and none of that is in the source.
 
-@simonw's habit of [narrating his work into a GitHub issue](https://news.ycombinator.com/item?id=38836569) is a fix
+Simon Willison's habit of [narrating his work into a GitHub issue](https://news.ycombinator.com/item?id=38836569) is a fix
 for exactly this. Every task, however small, starts as an issue, and the
 thread fills up with what he tried, what failed, and what he decided. The
 deliberation ends up stored next to the code instead of evaporating —
