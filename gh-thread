@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#
+# gh-thread — fuzzy-search your GitHub issues and read the full thread
+#             without leaving the terminal.
+#
+# Install:  gh extension install trangtinkers/gh-thread
+# Use:      gh thread [query...]
+#
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+gh thread — search your issues, read the whole thread.
+
+USAGE
+  gh thread [QUERY...]
+
+OPTIONS
+  -R, --repo OWNER/NAME   Only this repo (default: all repos you own)
+  -o, --owner NAME        Search this account instead of your own
+  -c, --comments          Match QUERY against comment text only
+  -s, --state open|closed Filter by state (default: both)
+  -L, --limit N           Rows to fetch (default: 200)
+  -h, --help              This
+
+KEYS
+  enter      read the thread in a pager
+  ctrl-o     open in browser
+  ctrl-/     toggle the preview pane
+  esc        quit
+
+EXAMPLES
+  gh thread                       # everything, most recently updated first
+  gh thread bluesky               # keyword
+  gh thread -c "race condition"   # something you wrote in a comment
+  gh thread -R me/notes -s open
+EOF
+}
+
+# ---------------------------------------------------------------- print mode
+# Called by fzf for the preview pane and by the enter binding. Uses the REST
+# API rather than `gh issue view`, so the body and *every* comment always
+# show up, including on issues that have neither.
+print_thread() {
+  local repo=$1 num=$2
+
+  gh api "repos/$repo/issues/$num" --jq '
+    "\(.title)",
+    "\(.state | ascii_upcase)  #\(.number)  \(.user.login)  \(.created_at[0:10])",
+    "",
+    (if ((.body // "") | test("\\S")) then .body else "(no description)" end)
+  ' 2>&1 || { echo "could not load $repo#$num"; return 1; }
+
+  local comments
+  comments=$(gh api --paginate "repos/$repo/issues/$num/comments" --jq '
+    .[] | "\n───  \(.user.login)  ·  \(.created_at[0:16] | sub("T"; " "))  ───\n\(.body)"
+  ' 2>/dev/null || true)
+
+  if [ -z "${comments//[[:space:]]/}" ]; then
+    printf '\n───  no comments yet  ───\n'
+  else
+    printf '%s\n' "$comments"
+  fi
+}
+
+# gh passes the extension its own path; make it absolute so fzf can re-invoke.
+self=$0
+case $self in
+  /*) ;;
+   *) self="$(cd "$(dirname "$self")" && pwd)/$(basename "$self")" ;;
+esac
+
+if [ "${1:-}" = "--print" ]; then
+  shift
+  print_thread "$@"
+  exit $?
+fi
+
+# ------------------------------------------------------------------- options
+repo=""; owner=""; state=""; limit=200; comments_only=0
+query=()
+
+while [ $# -gt 0 ]; do
+  case $1 in
+    -R|--repo)     repo=${2:?--repo needs OWNER/NAME}; shift 2 ;;
+    -o|--owner)    owner=${2:?--owner needs a name};   shift 2 ;;
+    -s|--state)    state=${2:?--state needs open|closed}; shift 2 ;;
+    -L|--limit)    limit=${2:?--limit needs a number}; shift 2 ;;
+    -c|--comments) comments_only=1; shift ;;
+    -h|--help)     usage; exit 0 ;;
+    --)            shift; query+=("$@"); break ;;
+    -*)            echo "gh-thread: unknown option $1" >&2; usage >&2; exit 1 ;;
+    *)             query+=("$1"); shift ;;
+  esac
+done
+
+command -v fzf >/dev/null 2>&1 || {
+  echo "gh-thread needs fzf: https://github.com/junegunn/fzf" >&2
+  exit 1
+}
+
+if [ -z "$repo" ] && [ -z "$owner" ]; then
+  owner=$(gh api user --jq .login) || {
+    echo "gh-thread: not logged in? try 'gh auth login'" >&2
+    exit 1
+  }
+fi
+
+# -------------------------------------------------------------------- search
+args=(--sort=updated -L "$limit" --json repository,number,title,state)
+[ -n "$repo"  ] && args+=(--repo "$repo")
+[ -n "$owner" ] && args+=(--owner "$owner")
+[ -n "$state" ] && args+=(--state "$state")
+[ "$comments_only" -eq 1 ] && args+=(--match=comments)
+
+rows=$(gh search issues ${query[@]+"${query[@]}"} "${args[@]}" --jq '
+  .[] | [
+    .repository.nameWithOwner,
+    (.number | tostring),
+    (if .state == "closed" then "✓" else "○" end) + "  " +
+      .repository.nameWithOwner + "#" + (.number | tostring) + "  " + .title
+  ] | @tsv
+') || exit 1
+
+if [ -z "$rows" ]; then
+  echo "no issues found" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------- pick
+printf '%s\n' "$rows" | fzf \
+  --delimiter='\t' \
+  --with-nth=3 \
+  --prompt='issue> ' \
+  --header='enter: read   ctrl-o: browser   ctrl-/: preview' \
+  --preview="'$self' --print {1} {2}" \
+  --preview-window='right:60%:wrap' \
+  --bind="enter:execute('$self' --print {1} {2} | less -R)" \
+  --bind='ctrl-o:execute-silent(gh issue view {2} -R {1} --web)' \
+  --bind='ctrl-/:toggle-preview' \
+  || true
