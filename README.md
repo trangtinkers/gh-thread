@@ -24,8 +24,8 @@ thread fills up with what he tried, what failed, and what he decided. The
 deliberation ends up stored next to the code instead of evaporating —
 which means an interruption costs a read rather than a re-derivation.
 
-That only works if the threads are cheap to get back to. Opening a browser
-is not cheap when you are in an editor.
+That only works if the threads are easy to get back to. Opening a browser
+is inconvenient when you are in an editor.
 
 This is the first of a few small tools trying to carry ideas from Roam Research into
 everyday software work: cheap capture, dense linking, and the assumption
