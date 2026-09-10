@@ -2,7 +2,7 @@
 
 A [boring, tiny tool](https://vaughntan.org/boringtinytools) for reading GitHub issue threads from the terminal.
 Fuzzy-search every issue across your repos, preview the whole comment
-history in a pane, open one in a pager. Nothing more.
+history in a pane, open one in a pager.
 
 ```
 gh thread                       # everything, most recently updated first
