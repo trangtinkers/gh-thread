@@ -28,7 +28,7 @@ That only works if the threads are easy to get back to. Opening a browser
 is inconvenient when you are in an editor.
 
 This is the first of a few small tools trying to carry ideas from Roam Research into
-everyday software work: cheap capture, dense linking, and the assumption
+everyday software work: quick capture, dense linking, and the assumption
 that you will need to re-enter your own thinking later.
 
 > Creators need an immediate connection to what they're creating.
